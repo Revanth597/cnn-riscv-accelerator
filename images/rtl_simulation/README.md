@@ -2,75 +2,93 @@
 
 ## Overview
 
-This directory contains the standalone RTL simulation results for the custom CNN instruction interface implemented using the Pico Co-Processor Interface (PCPI).
+This directory contains the standalone RTL simulation results used to verify the custom CNN instruction interface implemented through the Pico Co-Processor Interface (PCPI).
 
-The objective of these simulations is to verify the processor-to-accelerator communication interface before integration into the complete PicoRV32-based System-on-Chip (SoC).
+The simulations validate the processor-to-accelerator communication logic before integration into the complete PicoRV32-based System-on-Chip (SoC). Verification at the RTL level allows each hardware module to be tested independently, ensuring correct functionality prior to system-level integration.
 
-The RTL simulations validate:
+The RTL simulations focus on:
 
 - Custom instruction decoding
-- Configuration register updates
-- PCPI request and response handshaking
-- Accelerator configuration
-- Generation of debug responses
+- Configuration register programming
+- PCPI request detection
+- PCPI response generation
+- Accelerator control logic
+- Debug response generation
+
+Together, these simulations verify the correctness of the hardware interface between the processor and the CNN accelerator.
+
+---
+
+# Simulation Flow
+
+The standalone RTL verification follows the sequence shown below.
+
+```text
+RTL Testbench
+        │
+        ▼
+Apply Custom Instruction
+        │
+        ▼
+PCPI Instruction Decode
+        │
+        ▼
+Configuration Register Update
+        │
+        ▼
+Generate PCPI Response
+        │
+        ▼
+Return Debug Signature
+        │
+        ▼
+Verification Complete
+```
 
 ---
 
 # Directory Contents
 
-| File | Description |
-|------|-------------|
-| `01_testbench.png` | RTL simulation testbench hierarchy. |
-| `02_rtl_hierarchy.png` | RTL hierarchy showing the PCPI CNN module. |
-| `03_pcpi_decode.png` | Custom instruction decode logic. |
-| `04_configuration_registers.png` | CNN configuration registers. |
-| `05_configuration_capture.png` | Sequential logic that captures instruction parameters. |
-| `06_pcpi_response_logic.png` | PCPI response generation logic. |
-| `07_weight_instruction_response.png` | Response logic for `CNN_LD_WT`. |
-| `08_image_execute_response.png` | Response logic for `CNN_LD_IMG_EXE`. |
-| `09_weight_instruction_waveform.png` | RTL waveform for the weight-loading instruction. |
-| `10_image_execute_waveform.png` | RTL waveform for the image loading and execution instruction. |
+| Figure | Description |
+|---------|-------------|
+| **01_testbench.png** | Standalone RTL simulation testbench |
+| **02_rtl_hierarchy.png** | RTL module hierarchy |
+| **03_pcpi_decode.png** | Custom instruction decode logic |
+| **04_configuration_registers.png** | Accelerator configuration registers |
+| **05_configuration_capture.png** | Configuration register capture logic |
+| **06_pcpi_response_logic.png** | PCPI response generation logic |
+| **07_weight_instruction_response.png** | RTL verification of `CNN_LD_WT` |
+| **08_image_execute_response.png** | RTL verification of `CNN_LD_IMG_EXE` |
+| **09_weight_instruction_waveform.png** | Waveform for weight configuration instruction |
+| **10_image_execute_waveform.png** | Waveform for image configuration and execution instruction |
 
 ---
 
-# Simulation Objective
+# 01_testbench.png
 
-The RTL simulations verify the complete PCPI communication path between PicoRV32 and the CNN accelerator.
+## Description
 
-The verification includes:
+This figure shows the standalone RTL simulation testbench used during verification.
 
-- Instruction decoding
-- Configuration register updates
-- PCPI request detection
-- PCPI response generation
-- Register write-back
-- Accelerator configuration
-
-The simulations focus on validating the custom instruction interface independently before system-level integration.
-
----
-
-# Testbench
-
-**Image:** `01_testbench.png`
-
-The standalone RTL testbench instantiates the CNN PCPI module and applies custom instruction transactions that emulate execution by the PicoRV32 processor.
+The testbench instantiates the CNN PCPI module and emulates PicoRV32 by generating custom instruction transactions.
 
 The testbench verifies:
 
 - Valid PCPI requests
-- Correct instruction decoding
+- Instruction decoding
 - Configuration register updates
 - PCPI handshake signals
 - Returned debug responses
 
+The testbench isolates the accelerator interface from the remainder of the SoC, enabling focused functional verification.
+
 ---
 
-# RTL Hierarchy
+# 02_rtl_hierarchy.png
 
-**Image:** `02_rtl_hierarchy.png`
+## Description
 
-The RTL hierarchy illustrates the organization of the CNN PCPI module.
+This figure illustrates the internal RTL hierarchy of the CNN PCPI module.
 
 Major functional blocks include:
 
@@ -78,26 +96,28 @@ Major functional blocks include:
 - Configuration Registers
 - Configuration Capture Logic
 - PCPI Response Logic
-- Control Signals
+- Accelerator Control Logic
 
-The hierarchy demonstrates the modular organization of the accelerator interface.
+The modular hierarchy simplifies development, debugging, and future hardware extensions.
 
 ---
 
-# PCPI Instruction Decode
+# 03_pcpi_decode.png
 
-**Image:** `03_pcpi_decode.png`
+## Description
 
-Instruction decoding is performed using the RISC-V CUSTOM-0 opcode (`0x2B`) together with the `funct3` field.
+This figure shows the custom instruction decoding logic implemented inside the PCPI module.
 
-Two custom instructions are implemented:
+Instruction decoding is performed using the **CUSTOM-0** opcode (`0x2B`) together with the `funct3` field.
 
-## CNN_LD_WT
+Two custom instructions are implemented.
 
-```
-Opcode : 0x2B
-funct3 : 000
-```
+### CNN_LD_WT
+
+| Field | Value |
+|---------|-------|
+| Opcode | `0x2B` |
+| funct3 | `000` |
 
 Configures:
 
@@ -107,12 +127,12 @@ Configures:
 
 ---
 
-## CNN_LD_IMG_EXE
+### CNN_LD_IMG_EXE
 
-```
-Opcode : 0x2B
-funct3 : 001
-```
+| Field | Value |
+|---------|-------|
+| Opcode | `0x2B` |
+| funct3 | `001` |
 
 Configures:
 
@@ -120,39 +140,39 @@ Configures:
 - Output Feature Map Address
 - Image Size
 
-After updating the configuration registers, the accelerator asserts the internal `start_cnn` signal.
+After configuration, the accelerator asserts `start_cnn` to begin CNN execution.
 
 ---
 
-# Configuration Registers
+# 04_configuration_registers.png
 
-**Image:** `04_configuration_registers.png`
+## Description
 
-The CNN accelerator contains dedicated configuration registers used during execution.
+This figure illustrates the internal configuration registers programmed by the custom instructions.
 
-The registers include:
+The registers store:
 
 - Weight Base Address
 - Image Base Address
 - Result Base Address
-- Input Channels
-- Output Channels
+- Input Channel Count
+- Output Channel Count
 - Image Size
-- start_cnn
+- `start_cnn`
 
-These registers are programmed directly through the custom instructions.
+These registers remain programmed until updated by subsequent custom instructions.
 
 ---
 
-# Configuration Capture
+# 05_configuration_capture.png
 
-**Image:** `05_configuration_capture.png`
+## Description
 
-Configuration values are captured synchronously on the rising edge of the clock.
+Configuration parameters are captured synchronously on the rising edge of the system clock.
 
 ### CNN_LD_WT
 
-Stores:
+Captures:
 
 - Weight Base Address
 - Input Channels
@@ -160,133 +180,132 @@ Stores:
 
 ### CNN_LD_IMG_EXE
 
-Stores:
+Captures:
 
 - Image Base Address
 - Result Base Address
 - Image Size
 
-After the image configuration has been captured, the accelerator asserts the `start_cnn` signal, allowing CNN processing to begin.
+Following successful parameter capture, the accelerator asserts the internal `start_cnn` signal.
 
 ---
 
-# PCPI Response Logic
+# 06_pcpi_response_logic.png
 
-**Image:** `06_pcpi_response_logic.png`
+## Description
 
-The PCPI response logic generates the standard PicoRV32 handshake signals.
+This figure illustrates the generation of the standard PicoRV32 PCPI response signals.
 
-Signals generated:
+Generated signals include:
 
 - `pcpi_ready`
 - `pcpi_wr`
 - `pcpi_rd`
 - `pcpi_wait`
 
-During verification of the custom instruction interface, the accelerator immediately acknowledged both custom instructions.
+During verification, both custom instructions completed immediately after instruction decoding.
 
-Therefore,
+Consequently,
 
-```
+```text
 pcpi_ready = 1
 pcpi_wr    = 1
 pcpi_wait  = 0
 ```
 
-The standard PCPI interface supports multi-cycle execution through the `pcpi_wait` signal.
-
-For the custom instruction verification performed in this project, the objective was to validate instruction decoding, configuration register updates, and PCPI communication. Since the custom instructions only configured the accelerator and returned debug responses, `pcpi_wait` was intentionally left deasserted during these tests.
-
-The RTL accelerator may assert `pcpi_wait` whenever multi-cycle execution is required.
+Although `pcpi_wait` remained deasserted during verification, the implemented interface remains fully compatible with multi-cycle accelerator execution.
 
 ---
 
-# CNN_LD_WT Verification
+# 07_weight_instruction_response.png
 
-**Image:** `07_weight_instruction_response.png`
+## Description
 
-The first custom instruction configures the accelerator with weight-related parameters.
+This figure verifies the execution of the `CNN_LD_WT` instruction.
 
-Captured parameters:
+The simulation confirms:
 
-- Weight Base Address
-- Input Channel Count
-- Output Channel Count
-
-A unique debug signature is returned through `pcpi_rd`, allowing successful instruction execution to be verified from the waveform.
-
----
-
-# CNN_LD_IMG_EXE Verification
-
-**Image:** `08_image_execute_response.png`
-
-The second custom instruction configures image-related parameters.
-
-Captured parameters:
-
-- Image Base Address
-- Output Feature Map Address
-- Image Size
-
-After the configuration registers have been updated, the accelerator asserts the internal `start_cnn` signal.
-
-A unique debug signature is returned through `pcpi_rd`, confirming successful execution.
-
----
-
-# CNN_LD_WT Waveform
-
-**Image:** `09_weight_instruction_waveform.png`
-
-The waveform verifies successful execution of the weight-loading instruction.
-
-Verified behavior:
-
-- Valid PCPI request
 - Correct instruction decoding
+- Weight parameter capture
 - Configuration register updates
-- Successful PCPI handshake
-- Debug response generation
+- Generation of the expected debug response
+- Correct PCPI handshake
+
+Successful execution demonstrates proper configuration of weight-related accelerator parameters.
 
 ---
 
-# CNN_LD_IMG_EXE Waveform
+# 08_image_execute_response.png
 
-**Image:** `10_image_execute_waveform.png`
+## Description
 
-The waveform verifies successful execution of the image configuration instruction.
+This figure verifies the execution of the `CNN_LD_IMG_EXE` instruction.
 
-Verified behavior:
+The simulation confirms:
 
-- Valid PCPI request
+- Image parameter capture
 - Configuration register updates
 - Assertion of `start_cnn`
-- Successful PCPI handshake
-- Debug response generation
+- Generation of the expected debug response
+- Correct PCPI handshake
+
+Successful execution confirms proper initiation of CNN processing.
 
 ---
 
-# Scope of Verification
+# 09_weight_instruction_waveform.png
 
-The simulations presented in this directory focus on verifying the processor-to-accelerator communication interface.
+## Description
 
-Verification includes:
+This waveform illustrates the execution of the weight configuration instruction.
+
+The waveform verifies:
+
+- Valid PCPI request
+- Correct instruction decode
+- Configuration register programming
+- Successful PCPI response
+- Correct debug signature
+
+---
+
+# 10_image_execute_waveform.png
+
+## Description
+
+This waveform illustrates execution of the image configuration and execution instruction.
+
+The waveform verifies:
+
+- Valid PCPI request
+- Configuration register programming
+- Assertion of `start_cnn`
+- Successful PCPI response
+- Correct debug signature
+
+---
+
+# Verification Coverage
+
+The standalone RTL simulations validate the complete processor-to-accelerator communication interface.
+
+The verified functionality includes:
 
 - Custom instruction decoding
-- Configuration register updates
-- PCPI request signals
-- PCPI response signals
-- Accelerator configuration
+- Configuration register programming
+- PCPI request detection
+- PCPI response generation
+- Accelerator control signals
+- Debug response generation
 
-The internal functionality of the CNN accelerator datapath is verified independently as part of the RTL development.
+Verification of the convolution datapath and arithmetic hardware is performed separately during accelerator development.
 
 ---
 
 # Summary
 
-The standalone RTL simulations successfully verify the custom instruction interface implemented through the Pico Co-Processor Interface (PCPI).
+The RTL simulations successfully verify the custom instruction interface implemented through the Pico Co-Processor Interface (PCPI).
 
-Both `CNN_LD_WT` and `CNN_LD_IMG_EXE` correctly decode, update the accelerator configuration registers, generate the expected PCPI handshake signals, and return the appropriate debug responses.
+Both `CNN_LD_WT` and `CNN_LD_IMG_EXE` correctly decode, update accelerator configuration registers, generate the expected PCPI handshake signals, and return the appropriate debug responses.
 
-These simulations validate the processor-to-accelerator communication path and provide the foundation for successful integration into the complete PicoRV32-based SoC.
+These standalone simulations establish the correctness of the processor-to-accelerator communication interface and provide the foundation for successful integration into the complete PicoRV32-based System-on-Chip.

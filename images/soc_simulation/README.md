@@ -2,116 +2,105 @@
 
 ## Overview
 
-This directory contains the complete system-level simulation results of the CNN-enabled PicoRV32 System-on-Chip (SoC).
+This directory contains the complete System-on-Chip (SoC) simulation results for the CNN-RISC-V Accelerator.
 
-Unlike the standalone RTL simulations, these simulations verify the complete execution flow beginning from system reset, BootROM execution, firmware loading, custom instruction execution, and communication between the PicoRV32 processor and the CNN accelerator through the Pico Co-Processor Interface (PCPI).
+Unlike the standalone RTL simulations, which verify individual hardware modules in isolation, these simulations validate the complete embedded system from power-on reset through firmware execution and CNN accelerator configuration.
 
-The SoC consists of:
+The simulations demonstrate successful integration of the modified PicoRV32 processor, BootROM, firmware, peripherals, and the custom CNN accelerator connected through the Pico Co-Processor Interface (PCPI).
 
-- PicoRV32 Processor
+The verified system includes:
+
+- PicoRV32 RISC-V Processor
 - BootROM
 - Block RAM (BRAM)
 - SPI Flash
-- UART Lite
-- GPIO
+- AXI UART Lite
+- AXI GPIO
 - CNN PCPI Accelerator
 
-These simulations verify successful integration of the custom instruction interface into the complete processor system.
+These simulations verify that the processor, firmware, and hardware accelerator operate correctly as a unified embedded system.
+
+---
+
+# Simulation Flow
+
+The complete SoC verification follows the execution sequence shown below.
+
+```text
+Power-On Reset
+        │
+        ▼
+BootROM Execution
+        │
+        ▼
+Firmware Loading
+        │
+        ▼
+Firmware Execution
+        │
+        ▼
+CNN_LD_WT
+        │
+        ▼
+CNN_LD_IMG_EXE
+        │
+        ▼
+CNN Accelerator Configuration
+        │
+        ▼
+CNN Execution
+        │
+        ▼
+Firmware Post-Processing
+        │
+        ▼
+Simulation Complete
+```
 
 ---
 
 # Directory Contents
 
-| File | Description |
-|------|-------------|
-| `01_soc_testbench.png` | Complete SoC simulation testbench. |
-| `02_soc_hierarchy.png` | RTL hierarchy of the integrated PicoRV32 SoC. |
-| `03_pcpi_decode.png` | PCPI instruction decode logic. |
-| `04_configuration_registers.png` | CNN configuration registers. |
-| `05_configuration_capture.png` | Configuration register update logic. |
-| `06_pcpi_response_logic.png` | PCPI response generation logic. |
-| `07_weight_instruction_response.png` | Response logic for `CNN_LD_WT`. |
-| `08_image_execute_response.png` | Response logic for `CNN_LD_IMG_EXE`. |
-| `09_weight_instruction_waveform.png` | SoC waveform verifying `CNN_LD_WT`. |
-| `10_image_execute_waveform.png` | SoC waveform verifying `CNN_LD_IMG_EXE`. |
-| `11_uart_console.png` | UART output during BootROM execution. |
+| Figure | Description |
+|---------|-------------|
+| **01_testbench.png** | Complete SoC simulation testbench |
+| **02_rtl_hierarchy.png** | Integrated PicoRV32 SoC RTL hierarchy |
+| **03_pcpi_decode.png** | PCPI instruction decode logic |
+| **04_configuration_registers.png** | CNN accelerator configuration registers |
+| **05_configuration_capture.png** | Configuration register capture logic |
+| **06_pcpi_response_logic.png** | PCPI response generation logic |
+| **07_weight_instruction_pcpi_response.png** | Verification of `CNN_LD_WT` |
+| **08_image_execute_pcpi_response.png** | Verification of `CNN_LD_IMG_EXE` |
+| **09_weight_instruction_waveform.png** | Waveform for `CNN_LD_WT` |
+| **10_image_execute_waveform.png** | Waveform for `CNN_LD_IMG_EXE` |
+| **11_uart_console.png** | UART output during BootROM and firmware execution |
 
 ---
 
-# Simulation Objective
+# 01_testbench.png
 
-The SoC simulations verify successful communication between PicoRV32 firmware and the CNN accelerator through the PCPI interface.
+## Description
 
-The verification includes:
+This figure illustrates the complete SoC simulation testbench.
 
-- BootROM execution
-- Firmware loading
-- Firmware execution
-- Custom instruction decoding
-- Configuration register updates
-- PCPI communication
-- Accelerator configuration
-- UART debug output
-
----
-
-# Overall SoC Boot Flow
-
-```
-Reset
-   │
-   ▼
-BootROM Starts
-   │
-   ▼
-BRAM Verification
-   │
-   ▼
-SPI Flash Initialization
-   │
-   ▼
-Firmware Loaded into SRAM
-   │
-   ▼
-Jump to Firmware
-   │
-   ▼
-Firmware Executes
-   │
-   ▼
-CNN_LD_WT
-   │
-   ▼
-CNN_LD_IMG_EXE
-   │
-   ▼
-CNN Accelerator Begins Execution
-```
-
----
-
-# SoC Testbench
-
-**Image:** `01_soc_testbench.png`
-
-The complete SoC testbench instantiates:
+The testbench instantiates the complete embedded platform, including:
 
 - PicoRV32 Processor
 - BootROM
 - SPI Flash Model
+- BRAM
 - UART Receiver
-- Block RAM
 - CNN PCPI Accelerator
 
-The testbench executes the complete boot sequence and firmware while monitoring the processor-to-accelerator communication.
+Unlike the standalone RTL testbench, this environment executes the complete software stack beginning from reset.
 
 ---
 
-# RTL Hierarchy
+# 02_rtl_hierarchy.png
 
-**Image:** `02_soc_hierarchy.png`
+## Description
 
-The RTL hierarchy illustrates the integrated SoC.
+This figure illustrates the RTL hierarchy of the integrated System-on-Chip.
 
 Major modules include:
 
@@ -120,244 +109,202 @@ Major modules include:
 - AXI BRAM Controller
 - Block RAM
 - AXI Quad SPI
-- UART Lite
-- GPIO
+- AXI UART Lite
+- AXI GPIO
 - CNN PCPI Accelerator
 
-The CNN accelerator is connected directly to the PicoRV32 processor through the PCPI interface.
+The CNN accelerator is integrated directly with PicoRV32 through the Pico Co-Processor Interface (PCPI).
 
 ---
 
-# PCPI Instruction Decode
+# 03_pcpi_decode.png
 
-**Image:** `03_pcpi_decode.png`
+## Description
+
+This figure illustrates the custom instruction decoding logic used by the CNN accelerator.
 
 Instruction decoding is performed using:
 
-```
-Opcode = 0x2B
-```
+| Field | Value |
+|---------|-------|
+| Opcode | `0x2B (CUSTOM-0)` |
 
-The `funct3` field distinguishes the implemented instructions.
+Instruction selection is determined by the `funct3` field.
 
-### CNN_LD_WT
+| Instruction | funct3 |
+|-------------|---------|
+| `CNN_LD_WT` | `000` |
+| `CNN_LD_IMG_EXE` | `001` |
 
-```
-funct3 = 000
-```
-
-Updates:
-
-- Weight Base Address
-- Input Channels
-- Output Channels
+These instructions configure the accelerator before CNN execution begins.
 
 ---
 
-### CNN_LD_IMG_EXE
+# 04_configuration_registers.png
 
-```
-funct3 = 001
-```
+## Description
 
-Updates:
+This figure illustrates the accelerator configuration registers.
 
-- Image Base Address
-- Output Feature Map Address
-- Image Size
-
-The accelerator then asserts the internal `start_cnn` signal.
-
----
-
-# Configuration Registers
-
-**Image:** `04_configuration_registers.png`
-
-The CNN accelerator maintains dedicated configuration registers.
-
-These include:
+The registers store:
 
 - Weight Base Address
 - Image Base Address
 - Result Base Address
-- Input Channels
-- Output Channels
+- Input Channel Count
+- Output Channel Count
 - Image Size
-- start_cnn
+- `start_cnn`
 
-These registers are programmed directly through the custom instructions.
-
----
-
-# Configuration Capture
-
-**Image:** `05_configuration_capture.png`
-
-The sequential configuration logic captures accelerator parameters on the rising edge of the clock.
-
-The first instruction stores weight-related parameters.
-
-The second instruction stores image-related parameters and asserts `start_cnn`, allowing CNN execution to begin.
+These registers are programmed directly by the custom instructions.
 
 ---
 
-# PCPI Response Logic
+# 05_configuration_capture.png
 
-**Image:** `06_pcpi_response_logic.png`
+## Description
 
-The PCPI response logic generates the standard PicoRV32 handshake signals.
+This figure shows the sequential logic responsible for capturing accelerator parameters.
 
-Signals include:
+The first instruction configures weight parameters.
+
+The second instruction configures image parameters and asserts the internal `start_cnn` signal, initiating CNN execution.
+
+---
+
+# 06_pcpi_response_logic.png
+
+## Description
+
+This figure illustrates generation of the standard PCPI response signals.
+
+Generated signals include:
 
 - `pcpi_ready`
 - `pcpi_wr`
 - `pcpi_rd`
 - `pcpi_wait`
 
-During verification of the custom instruction interface:
+During verification:
 
-```
+```text
 pcpi_ready = 1
 pcpi_wr    = 1
 pcpi_wait  = 0
 ```
 
-The standard PCPI interface supports multi-cycle execution through the `pcpi_wait` signal.
-
-For the verification performed in this project, the objective was to validate instruction decoding, configuration register updates, and processor-to-accelerator communication. Since the custom instructions only configured the accelerator and returned debug responses, `pcpi_wait` remained deasserted during these tests.
-
-The RTL accelerator may assert `pcpi_wait` whenever multi-cycle execution is required.
+The implementation nevertheless remains compatible with multi-cycle accelerator execution through the standard `pcpi_wait` mechanism.
 
 ---
 
-# CNN_LD_WT Verification
+# 07_weight_instruction_pcpi_response.png
 
-**Image:** `09_weight_instruction_waveform.png`
+## Description
 
-The waveform verifies successful execution of the first custom instruction.
+This figure verifies execution of the `CNN_LD_WT` instruction.
 
-Verified behavior:
+The simulation confirms:
 
-- Instruction decode
+- Correct instruction decoding
 - Configuration register updates
-- Weight configuration
-- Input channel configuration
-- Output channel configuration
-- Successful PCPI handshake
+- Weight parameter capture
+- PCPI handshake generation
 - Debug response generation
 
 ---
 
-# CNN_LD_IMG_EXE Verification
+# 08_image_execute_pcpi_response.png
 
-**Image:** `10_image_execute_waveform.png`
+## Description
 
-The waveform verifies execution of the second custom instruction.
+This figure verifies execution of the `CNN_LD_IMG_EXE` instruction.
 
-Verified behavior:
+The simulation confirms:
+
+- Image parameter capture
+- Configuration register updates
+- Assertion of `start_cnn`
+- PCPI handshake generation
+- Debug response generation
+
+---
+
+# 09_weight_instruction_waveform.png
+
+## Description
+
+This waveform verifies successful execution of the weight configuration instruction.
+
+Verified functionality includes:
 
 - Instruction decode
+- Weight configuration
+- Register updates
+- PCPI response
+- Debug signature generation
+
+---
+
+# 10_image_execute_waveform.png
+
+## Description
+
+This waveform verifies successful execution of the image configuration instruction.
+
+Verified functionality includes:
+
 - Image configuration
-- Result buffer configuration
-- Image size configuration
+- Register updates
 - Assertion of `start_cnn`
-- Successful PCPI handshake
-- Debug response generation
+- PCPI response
+- Debug signature generation
 
 ---
 
-# CNN Processing
+# 11_uart_console.png
 
-After the accelerator receives both custom instructions, CNN execution begins.
+## Description
 
-The RTL accelerator performs:
+This figure shows the UART messages transmitted during system boot.
 
-- Weight Loading
-- Image Loading
-- Convolution
-- Multiply-Accumulate (MAC)
-- ReLU Activation
+The UART output provides runtime checkpoints confirming successful execution of the BootROM before firmware begins.
 
-The generated INT16 feature map is written to BRAM.
+| UART Value | Meaning |
+|------------|---------|
+| `0x0A` | First BRAM verification |
+| `0x14` | Second BRAM verification |
+| `0xFE` | SPI Flash initialized; firmware loading begins |
+| `0xFF` | Firmware loaded successfully; control transferred to firmware |
 
-PicoRV32 firmware subsequently performs:
-
-- Max Pooling
-- Intermediate Scaling
-- Arithmetic Right Shift
-- Quantization
-- Clamping
-
-before storing the final INT8 feature map back into BRAM.
+These values provide a simple mechanism for monitoring system startup during simulation.
 
 ---
 
-# UART Console Output
+# Verification Coverage
 
-**Image:** `11_uart_console.png`
+The SoC simulations validate complete hardware/software integration.
 
-During BootROM execution, status values are transmitted over UART to indicate boot progress.
+Verified functionality includes:
 
-| UART Output | Description |
-|-------------|-------------|
-| **0x0A** | BRAM verification using the first test value (decimal 10). |
-| **0x14** | BRAM verification using the second test value (decimal 20). |
-| **0xFE** | SPI Flash successfully initialized. BootROM begins loading the firmware image. |
-| **0xFF** | Firmware image successfully loaded into SRAM, checksum verified, and control transferred to the firmware entry point. |
-
-The UART output therefore represents the following execution sequence.
-
-```
-Reset
-   │
-BootROM Starts
-   │
-BRAM Verification
-(0x0A)
-   │
-Second BRAM Verification
-(0x14)
-   │
-SPI Flash Ready
-(0xFE)
-   │
-Firmware Loaded
-   │
-Checksum Verified
-   │
-Jump to Firmware
-(0xFF)
-```
-
-These UART values provide simple runtime checkpoints confirming successful BootROM execution before firmware begins.
-
----
-
-# Scope of Verification
-
-The simulations presented in this directory focus on verifying complete system integration between the PicoRV32 processor and the CNN accelerator.
-
-Verification includes:
-
+- System reset
 - BootROM execution
 - Firmware loading
 - Firmware execution
+- Custom instruction execution
 - Processor-to-accelerator communication
-- Custom instruction decoding
-- Configuration register updates
+- Configuration register programming
 - PCPI request and response signals
-- Accelerator configuration
+- CNN accelerator configuration
 - UART status reporting
 
-The internal CNN accelerator datapath is verified independently as part of the RTL development.
+The arithmetic datapath of the CNN accelerator is verified independently during standalone RTL development.
 
 ---
 
 # Summary
 
-The SoC simulations demonstrate successful integration of the CNN accelerator with the PicoRV32 processor.
+The SoC simulations demonstrate successful integration of the CNN-RISC-V Accelerator into the complete PicoRV32-based embedded system.
 
-The complete system successfully executes the BootROM, loads the firmware, configures the CNN accelerator using two custom RISC-V instructions, and verifies processor-to-accelerator communication through the Pico Co-Processor Interface (PCPI).
+Beginning from system reset, the simulations verify BootROM execution, firmware loading, execution of the custom RISC-V instructions, configuration of the CNN accelerator, and processor-to-accelerator communication through the Pico Co-Processor Interface (PCPI).
 
-These simulations validate the complete software-to-hardware control path and confirm successful system-level integration of the custom instruction interface within the PicoRV32-based SoC.
+Together with the standalone RTL simulations, these results confirm that the hardware and software components operate correctly as an integrated System-on-Chip, providing a complete validation of the accelerator control path and embedded execution flow.
