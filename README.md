@@ -895,3 +895,21 @@ The **CNN-RISC-V Accelerator** demonstrates a complete hardware/software co-desi
 The RTL accelerator performs convolution, multiply-accumulate (MAC), and ReLU activation, while PicoRV32 firmware executes Max Pooling, intermediate scaling, arithmetic shifting, quantization, and output formatting. Together, these components implement an efficient and modular CNN inference pipeline suitable for embedded AI applications.
 
 The project includes a complete processor implementation, BootROM, firmware, standalone RTL verification, System-on-Chip simulation, and comprehensive documentation, providing a complete reference implementation for integrating hardware accelerators with lightweight RISC-V processors.
+
+## Third-Party Components
+
+This project includes modifications of the following open-source software:
+
+| Component | License |
+|-----------|---------|
+| PicoRV32 | ISC License |
+
+The original PicoRV32 license is provided in `THIRD_PARTY_LICENSES/PICORV32_LICENSE`.
+
+## Acknowledgements
+
+This project was developed during the **Summer Internship 2026** under the **CIE Organization**.
+
+The project benefited from the guidance and mentorship provided during the internship. The implementation, documentation, and repository organization presented here were prepared for educational and portfolio purposes.
+
+The repository also incorporates the open-source **PicoRV32** processor by Claire Xenia Wolf, licensed under the ISC License.
