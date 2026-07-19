@@ -1,336 +1,257 @@
 # Boot Process
 
-This document describes the complete boot sequence of the CNN Hardware Accelerator SoC, from processor reset to CNN inference execution. It explains the responsibilities of the BootROM, firmware loading process, firmware execution flow, and the generated boot artifacts.
+## Overview
+
+This document describes the complete boot sequence of the CNN-RISC-V Accelerator System-on-Chip (SoC), beginning from system reset and ending with CNN inference execution.
+
+The boot process involves the coordinated operation of the BootROM, PicoRV32 processor, memory subsystem, peripherals, and the custom CNN accelerator connected through the Pico Co-Processor Interface (PCPI).
 
 ---
 
-# Overview
+# Boot Sequence
 
-After power-on or reset, execution begins from the BootROM stored in on-chip ROM. The BootROM is responsible for initializing the system, verifying the firmware image stored in external SPI Flash, copying it into SRAM, and transferring execution to the firmware.
+The overall boot flow is illustrated below.
 
-The firmware then configures the CNN accelerator using custom instructions, executes the convolution pipeline, and performs firmware-based post-processing before storing the final INT8 output back into BRAM.
-
----
-
-# Complete Boot Flow
-
-<p align="center">
-<img src="../images/architecture/04_boot_process_flow.png" width="95%">
-</p>
-
-The complete execution sequence is:
-
-```
+```text
 Power-On / Reset
         │
         ▼
-BootROM (ROM)
+Clock Generation
         │
         ▼
-start.S
+Processor Reset Released
         │
         ▼
-boot.S
-        │
-Hardware Initialization
+BootROM Execution
         │
         ▼
-checksum.S
-        │
-Firmware Verification
+Firmware Initialization
         │
         ▼
-Copy Firmware
-(SPI Flash → SRAM)
+Peripheral Initialization
         │
         ▼
-Jump to Firmware Entry
-        │
-═══════════════════════════════════════
- Firmware (SRAM)
-═══════════════════════════════════════
+CNN Parameter Configuration
         │
         ▼
-start.S
+Custom Instructions
         │
         ▼
-cnn.S
+CNN Accelerator Execution
         │
+        ▼
+Firmware Post-Processing
+        │
+        ▼
+Program Completion
+```
+
+---
+
+# 1. System Reset
+
+System execution begins after a hardware reset.
+
+During reset:
+
+- PicoRV32 is held in reset.
+- The CNN accelerator remains idle.
+- Configuration registers are cleared.
+- BRAM contents remain unchanged.
+- Peripherals are initialized to their default state.
+
+Once the reset signal is deasserted, the processor begins execution from the BootROM.
+
+---
+
+# 2. Clock Initialization
+
+The clock generation circuitry provides the system clock used by:
+
+- PicoRV32
+- CNN Accelerator
+- BRAM
+- UART Lite
+- GPIO
+- SPI Controller
+
+All synchronous components begin operating after the clock becomes stable.
+
+---
+
+# 3. BootROM Execution
+
+The processor fetches its first instruction from the BootROM.
+
+The BootROM is responsible for:
+
+- Initializing the execution environment
+- Setting the stack pointer
+- Preparing memory for program execution
+- Jumping to the main firmware
+
+---
+
+# 4. Firmware Initialization
+
+After BootROM execution, the firmware initializes the software environment.
+
+Typical initialization tasks include:
+
+- Clearing software variables
+- Initializing memory buffers
+- Configuring runtime parameters
+- Preparing CNN execution
+
+---
+
+# 5. Peripheral Initialization
+
+The firmware initializes the required peripherals, including:
+
+- UART Lite
+- GPIO
+- SPI Interface
+- BRAM access
+
+UART is primarily used for debugging during simulation and verification.
+
+---
+
+# 6. CNN Parameter Configuration
+
+Before execution, the firmware prepares the CNN configuration.
+
+This includes:
+
+- Weight memory address
+- Image memory address
+- Result buffer address
+- Input channel count
+- Output channel count
+- Image dimensions
+
+These values are programmed into the accelerator through custom instructions.
+
+---
+
+# 7. Custom Instruction Execution
+
+The firmware executes two custom RISC-V instructions.
+
+## CNN_LD_WT
+
+Configures:
+
+- Weight Base Address
+- Input Channels
+- Output Channels
+
+---
+
+## CNN_LD_IMG_EXE
+
+Configures:
+
+- Image Base Address
+- Result Buffer Address
+- Image Size
+
+After configuration, the accelerator asserts:
+
+```text
+start_cnn
+```
+
+which initiates CNN execution.
+
+---
+
+# 8. CNN Accelerator Execution
+
+The RTL accelerator performs:
+
+1. Weight Loading
+2. Image Loading
+3. Convolution
+4. Multiply-Accumulate (MAC)
+5. ReLU Activation
+6. INT16 Feature Map Generation
+
+The generated feature map is stored in BRAM.
+
+---
+
+# 9. Firmware Post-Processing
+
+After accelerator execution completes, PicoRV32 firmware performs:
+
+1. Read INT16 Feature Map
+2. Max Pooling
+3. Intermediate Scaling
+4. Arithmetic Right Shift
+5. Quantization
+6. Clamping
+7. Store Final INT8 Feature Map
+
+This stage remains programmable, allowing post-processing algorithms to evolve without modifying the RTL accelerator.
+
+---
+
+# 10. Program Completion
+
+After the final feature map is written to BRAM:
+
+- CNN inference is complete.
+- Firmware may output debug information through UART.
+- The processor either terminates execution or waits for the next inference request, depending on the application.
+
+---
+
+# Boot Flow Summary
+
+```text
+Reset
+ │
+ ▼
+Clock Stable
+ │
+ ▼
+BootROM
+ │
+ ▼
+Firmware Initialization
+ │
+ ▼
+Peripheral Setup
+ │
+ ▼
 CNN_LD_WT
-        │
+ │
+ ▼
 CNN_LD_IMG_EXE
-        │
-CNN Accelerator
-        │
+ │
+ ▼
+RTL Accelerator
+ │
+ ▼
 INT16 Feature Map
-        │
-Firmware Post Processing
-(MaxPool + Scaling + Quantization)
-        │
-INT8 Output
+ │
+ ▼
+Firmware Post-Processing
+ │
+ ▼
+INT8 Output Feature Map
+ │
+ ▼
+Program Complete
 ```
 
 ---
 
-# BootROM Responsibilities
+# Notes
 
-The BootROM performs all initialization before firmware execution.
-
-Its responsibilities include:
-
-- Initialize processor state
-- Initialize stack pointer
-- Configure runtime environment
-- Perform BRAM verification
-- Initialize SPI Flash interface
-- Read firmware header
-- Verify firmware checksum
-- Copy firmware image into SRAM
-- Transfer execution to firmware entry point
-
-The BootROM itself performs no CNN computation. Its only responsibility is safely loading and starting the firmware.
-
----
-
-# BootROM Source Files
-
-| File | Purpose |
-|------|---------|
-| `start.S` | Reset entry point and stack initialization |
-| `boot.S` | Hardware initialization and boot control |
-| `checksum.S` | Firmware header verification and checksum validation |
-| `rtl_ops.S` | RTL-version specific helper routines |
-
----
-
-# Firmware Source Files
-
-After BootROM transfers control, firmware execution begins.
-
-| File | Purpose |
-|------|---------|
-| `start.S` | Firmware entry point |
-| `cnn.S` | Main CNN inference program |
-| `data.S` | Input image data |
-| `weights_INT4_16_channel.S` | CNN weights |
-| `intermediate_scales.S` | Per-channel scaling constants |
-| `maxpool_scale_quantize.c` | Firmware post-processing |
-
----
-
-# Firmware Execution Flow
-
-Firmware executes the CNN inference in the following order.
-
-```
-start.S
-    │
-    ▼
-cnn.S
-    │
-    ▼
-CNN_LD_WT
-(Configure CNN)
-    │
-    ▼
-CNN_LD_IMG_EXE
-(Start Accelerator)
-    │
-    ▼
-CNN Accelerator (RTL)
-    │
-    ▼
-INT16 Feature Map
-Stored in BRAM
-    │
-    ▼
-Read Feature Map
-    │
-    ▼
-Max Pooling
-    │
-    ▼
-Multiply by Intermediate Scales
-(INT16 × UINT16 → INT32)
-    │
-    ▼
-Arithmetic Right Shift
-(Q16 Scaling)
-    │
-    ▼
-Quantization
-    │
-    ▼
-Clamp to INT8
-    │
-    ▼
-Store Final Output to BRAM
-```
-
----
-
-# Hardware / Firmware Partition
-
-The CNN inference pipeline is shared between hardware and firmware.
-
-## RTL Accelerator
-
-The hardware accelerator performs:
-
-- Weight loading
-- Image loading
-- Sliding-window convolution
-- MAC operations
-- ReLU activation
-
-Output:
-
-```
-INT16 Feature Map
-```
-
-stored into BRAM.
-
----
-
-## PicoRV32 Firmware
-
-Firmware performs:
-
-- Read INT16 feature map
-- Max Pooling
-- Multiply by intermediate scales
-- Arithmetic right shift
-- Quantization
-- Clamp to INT8
-- Store final feature map into BRAM
-
-This division keeps the accelerator focused on computationally intensive operations while firmware performs flexible post-processing.
-
----
-
-# Firmware Header
-
-During firmware generation, an additional bootable image is created.
-
-The firmware header consists of:
-
-| Offset | Field | Description |
-|---------|---------|-------------|
-| 0x00 | Magic | Boot image signature |
-| 0x04 | Size | Firmware payload size |
-| 0x08 | Load Address | SRAM destination |
-| 0x0C | Checksum | Firmware checksum |
-
-Example:
-
-```
-Magic      : 0xB007B007
-Load Addr  : 0x00020000
-Checksum   : Generated during build
-```
-
-The BootROM validates this header before copying the firmware.
-
----
-
-# Firmware Build Pipeline
-
-The firmware is generated through the following build stages.
-
-```
-Assembly Sources
-(.S / .c)
-        │
-        ▼
-RISC-V GCC
-        │
-        ▼
-Object Files
-(.o)
-        │
-        ▼
-Linker
-        │
-        ▼
-firmware.elf
-        │
-        ▼
-Objcopy
-        │
-        ▼
-firmware.bin
-        │
-        ▼
-Python Conversion Scripts
-        │
-        ├── firmware.hex
-        ├── firmware.coe
-        ├── firmware.mem
-        ├── firmware.memh
-        ├── firmware_with_header.bin
-        ├── firmware_with_header.hex
-        ├── firmware_with_header.mem
-        └── firmware_with_header.memh
-```
-
-These generated files are used for FPGA memory initialization, simulation, and BootROM loading.
-
----
-
-# Generated Boot Artifacts
-
-## BootROM
-
-| File | Description |
-|------|-------------|
-| bootrom.elf | Executable with symbols |
-| bootrom.bin | Raw binary |
-| bootrom.hex | Hex image |
-| bootrom.coe | BRAM initialization |
-| bootrom.mem | Memory initialization |
-| bootrom.memh | Memory hex |
-| bootrom.v | Verilog ROM module |
-
----
-
-## Firmware
-
-| File | Description |
-|------|-------------|
-| firmware.elf | Executable |
-| firmware.bin | Binary image |
-| firmware.hex | Hex image |
-| firmware.coe | COE initialization |
-| firmware.mem | Memory initialization |
-| firmware.memh | Memory hex |
-| firmware_with_header.bin | Bootable firmware |
-| firmware_with_header.hex | Bootable HEX |
-| firmware_with_header.coe | Bootable COE |
-| firmware_with_header.mem | Bootable MEM |
-| firmware_with_header.memh | Bootable MEMH |
-
----
-
-# UART Boot Messages
-
-During SoC simulation, the BootROM prints diagnostic values through UART.
-
-| UART Output | Description |
-|------------|-------------|
-| **0x0A** | First BRAM verification test |
-| **0x14** | Second BRAM verification test |
-| **0xFE** | SPI Flash successfully initialized |
-| **0xFF** | Firmware execution completed |
-
-These values are useful for verifying successful boot and firmware execution during simulation.
-
----
-
-# Summary
-
-The BootROM provides a secure and deterministic startup process by verifying and loading the firmware into SRAM before execution.
-
-Once started, the firmware configures the CNN accelerator using custom PCPI instructions, executes the convolution pipeline, performs firmware-based post-processing (Max Pooling, scaling, quantization, and clamping), and stores the final INT8 output feature map back into BRAM.
-
-This hardware/software co-design combines the performance of a dedicated RTL accelerator with the flexibility of firmware-based post-processing, resulting in an efficient CNN inference pipeline.
+- The BootROM executes only during system startup.
+- The CNN accelerator remains idle until explicitly triggered by `CNN_LD_IMG_EXE`.
+- Communication between the processor and accelerator is implemented entirely through the Pico Co-Processor Interface (PCPI).
+- Post-processing is intentionally implemented in firmware to simplify experimentation with scaling and quantization algorithms.

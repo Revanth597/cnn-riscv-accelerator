@@ -2,40 +2,40 @@
 
 ## Overview
 
-The CNN-RISC-V Accelerator is a hardware/software co-design developed during the Summer Internship to accelerate Convolutional Neural Network (CNN) inference on a RISC-V processor.
+The **CNN-RISC-V Accelerator** is a hardware/software co-designed CNN inference engine developed during the Summer Internship. The system integrates a modified **PicoRV32 RISC-V processor** with a custom RTL CNN accelerator through the **Pico Co-Processor Interface (PCPI)**.
 
-The system integrates a modified PicoRV32 processor with a custom CNN coprocessor through the Pico Co-Processor Interface (PCPI). The architecture partitions CNN inference between dedicated RTL hardware and PicoRV32 firmware, allowing computationally intensive operations to execute in hardware while programmable post-processing remains in software.
-
-This approach provides a modular, scalable, and easily verifiable architecture suitable for embedded CNN inference.
+The architecture accelerates computationally intensive CNN operations in dedicated hardware while retaining configurable post-processing within firmware. This partitioning provides a lightweight, modular, and extensible platform for embedded CNN inference.
 
 ---
 
 # System Architecture
 
-The complete system consists of the following major components:
+The complete System-on-Chip (SoC) consists of the following major components:
 
 - PicoRV32 RISC-V Processor
-- CNN PCPI Coprocessor
+- CNN PCPI Accelerator
 - BootROM
 - Block RAM (BRAM)
-- SPI Flash
-- UART Lite
-- GPIO
 - AXI Interconnect
+- AXI BRAM Controller
+- AXI UART Lite
+- AXI GPIO
+- AXI Quad SPI
+- External SPI Flash
 
-The PicoRV32 processor controls the accelerator through custom RISC-V instructions while the accelerator performs CNN computation.
+The PicoRV32 processor configures and controls the CNN accelerator using custom RISC-V instructions, while the accelerator independently performs the computationally intensive stages of CNN inference.
 
 ---
 
-# Overall Architecture
+# Hardware–Software Partitioning
 
-The complete inference pipeline is divided into two execution domains.
+CNN inference is intentionally divided between dedicated RTL hardware and PicoRV32 firmware.
 
-## RTL Hardware
+## RTL Accelerator
 
-Responsible for computationally intensive CNN operations.
+The RTL accelerator is responsible for the computationally intensive stages of inference.
 
-Operations include:
+Operations performed in hardware include:
 
 - Weight Loading
 - Image Loading
@@ -46,9 +46,9 @@ Operations include:
 
 ---
 
-## Firmware
+## PicoRV32 Firmware
 
-Responsible for configurable post-processing.
+The firmware performs configurable post-processing after the RTL accelerator completes execution.
 
 Operations include:
 
@@ -57,63 +57,73 @@ Operations include:
 - Arithmetic Right Shift
 - Quantization
 - Clamping
-- Output Feature Map Storage
+- INT8 Output Feature Map Storage
 
-This partition keeps the accelerator focused on high-throughput computation while maintaining software flexibility for quantization and output processing.
+Keeping these operations in firmware allows quantization parameters and post-processing algorithms to be modified without requiring RTL redesign.
 
 ---
 
-# Hardware Architecture
+# SoC Architecture
 
-The CNN accelerator is connected directly to PicoRV32 using the Pico Co-Processor Interface (PCPI).
+The complete architecture is centered around the PicoRV32 processor and an AXI-based peripheral subsystem.
 
-The accelerator receives configuration information from the processor and performs CNN computation independently.
+The processor communicates with memory and peripherals through the AXI interconnect while interacting with the CNN accelerator through the Pico Co-Processor Interface (PCPI).
 
-The RTL accelerator performs:
+The overall architecture is illustrated below.
+
+> **Figure:** SoC Block Diagram
+
+---
+
+# CNN Accelerator
+
+The CNN accelerator is implemented entirely in RTL and performs the computationally intensive stages of CNN inference.
+
+The accelerator performs the following operations:
 
 1. Load CNN Weights
-2. Load Input Feature Map
+2. Load Input Image
 3. Convolution
 4. Multiply-Accumulate (MAC)
 5. ReLU Activation
 6. Store INT16 Feature Map into BRAM
 
-The accelerator output is stored as an INT16 feature map.
+The generated INT16 feature map is subsequently processed by PicoRV32 firmware.
 
 ---
 
-# Firmware Architecture
+# Firmware
 
-After the RTL accelerator finishes execution, PicoRV32 firmware performs post-processing on the generated INT16 feature map.
+After the accelerator completes execution, PicoRV32 firmware performs software-based post-processing.
 
-The firmware executes the following sequence:
+Execution sequence:
 
 1. Read INT16 Feature Map from BRAM
 2. Perform Max Pooling (2 × 2)
 3. Read Intermediate Scaling Factors
-4. Multiply pooled INT16 values by UINT16 (Q16) scales
+4. Multiply pooled INT16 values by UINT16 (Q16) scaling factors
 5. Produce INT32 intermediate values
-6. Arithmetic Right Shift
+6. Perform Arithmetic Right Shift
 7. Quantize to INT8
 8. Clamp to the valid INT8 range
 9. Store the final INT8 feature map into BRAM
 
-Separating these operations into firmware allows quantization parameters and post-processing algorithms to be modified without requiring RTL changes.
+Separating these operations into firmware enables rapid modification of scaling and quantization algorithms without requiring hardware changes.
 
 ---
 
 # PCPI Interface
 
-Communication between PicoRV32 and the CNN accelerator occurs through the Pico Co-Processor Interface (PCPI).
+Communication between PicoRV32 and the CNN accelerator is implemented using the **Pico Co-Processor Interface (PCPI)**.
 
 ## Request Signals
 
 | Signal | Description |
 |----------|-------------|
-| pcpi_valid | Indicates a valid custom instruction |
-| pcpi_insn | 32-bit custom instruction |
-| pcpi_rs1 | Source Register 1 |
-| pcpi_rs2 | Source Register 2 |
+| `pcpi_valid` | Indicates a valid custom instruction |
+| `pcpi_insn` | 32-bit instruction word |
+| `pcpi_rs1` | Source Register 1 |
+| `pcpi_rs2` | Source Register 2 |
 
 ---
 
@@ -121,26 +131,18 @@ Communication between PicoRV32 and the CNN accelerator occurs through the Pico C
 
 | Signal | Description |
 |----------|-------------|
-| pcpi_ready | Instruction completed |
-| pcpi_wr | Register write-back enable |
-| pcpi_rd | Data returned to PicoRV32 |
-| pcpi_wait | Processor stall request |
+| `pcpi_ready` | Accelerator has completed execution |
+| `pcpi_wr` | Register write-back enable |
+| `pcpi_rd` | Data returned to PicoRV32 |
+| `pcpi_wait` | Requests processor stall during multi-cycle execution |
 
-During verification, the accelerator immediately acknowledged each custom instruction.
-
-Therefore,
-
-- pcpi_ready = 1
-- pcpi_wr = 1
-- pcpi_wait = 0
-
-The standard PCPI interface supports asserting `pcpi_wait` whenever multi-cycle accelerator execution is required. During custom instruction verification, it remained deasserted because the objective was to validate instruction decoding, configuration register updates, and PCPI communication.
+During accelerator verification, the custom instructions completed without asserting `pcpi_wait`. The interface nevertheless remains compatible with multi-cycle accelerator implementations whenever processor stalling is required.
 
 ---
 
 # Custom Instructions
 
-Two custom RISC-V instructions were designed for accelerator configuration.
+Two custom RISC-V instructions were designed to configure and control the CNN accelerator.
 
 ## CNN_LD_WT
 
@@ -154,7 +156,7 @@ The instruction stores:
 - Input Channel Count
 - Output Channel Count
 
-The captured values are stored in internal configuration registers.
+These parameters are written into internal accelerator configuration registers.
 
 ---
 
@@ -170,9 +172,9 @@ The instruction stores:
 - Result Buffer Address
 - Image Size
 
-After updating these registers, the accelerator asserts:
+After updating the configuration registers, the accelerator asserts
 
-```
+```text
 start_cnn
 ```
 
@@ -182,42 +184,37 @@ to begin CNN execution.
 
 # Configuration Registers
 
-The accelerator contains dedicated configuration registers.
+The accelerator contains dedicated configuration registers programmed entirely through the custom instructions.
 
 | Register | Description |
 |-----------|-------------|
-| weight_base | Weight memory base address |
-| image_base | Input image address |
-| result_base | Output feature map address |
-| input_channels | Number of input channels |
-| output_channels | Number of output channels |
-| image_size | Input image dimension |
-| start_cnn | Accelerator start signal |
-
-These registers are programmed entirely through the custom instructions.
+| `weight_base` | Weight memory base address |
+| `image_base` | Input image base address |
+| `result_base` | Output feature map address |
+| `input_channels` | Number of input channels |
+| `output_channels` | Number of output channels |
+| `image_size` | Input image dimension |
+| `start_cnn` | Accelerator start signal |
 
 ---
 
 # CNN Processing Pipeline
 
-The complete CNN inference pipeline is shown below.
-
-```
+```text
 Input Image (INT8)
         │
         ▼
 CNN_LD_WT
         │
-Load Weight Configuration
         ▼
 CNN_LD_IMG_EXE
         │
-Load Image Configuration
-        │
+        ▼
 start_cnn
+        │
         ▼
 ──────────────────────────────
-CNN Accelerator (RTL)
+RTL CNN Accelerator
 ──────────────────────────────
 Weight Loader
         │
@@ -230,31 +227,33 @@ MAC
 ReLU
         │
 Store INT16 Feature Map
+──────────────────────────────
+        │
         ▼
 BRAM
-──────────────────────────────
         │
-Read INT16 Feature Map
         ▼
+──────────────────────────────
 PicoRV32 Firmware
 ──────────────────────────────
+Read INT16 Feature Map
+        │
 Max Pooling
         │
-Multiply by Intermediate Scale
+Intermediate Scaling
         │
 INT16 × UINT16 (Q16)
-        ▼
+        │
 INT32
         │
 Arithmetic Right Shift
-        ▼
+        │
 Quantization
-        ▼
+        │
 Clamp
-        ▼
+        │
 Store INT8 Feature Map
-        ▼
-BRAM
+──────────────────────────────
 ```
 
 ---
@@ -263,123 +262,92 @@ BRAM
 
 The inference pipeline uses multiple numerical formats.
 
-| Stage | Data Type |
-|----------|-----------|
+| Processing Stage | Data Type |
+|------------------|-----------|
 | Input Image | INT8 |
-| Convolution Output | INT16 |
-| Max Pool Output | INT16 |
+| Accelerator Output | INT16 |
 | Intermediate Scale | UINT16 (Q16) |
-| Scaling Result | INT32 |
+| After Scaling | INT32 |
 | Final Output | INT8 |
 
 ---
 
 # End-to-End Execution
 
-The complete execution flow is:
+The complete execution flow is summarized below.
 
 1. BootROM initializes the system.
-2. Firmware starts execution.
+2. Firmware begins execution.
 3. Firmware loads CNN parameters.
-4. Firmware executes `CNN_LD_WT`.
-5. Firmware executes `CNN_LD_IMG_EXE`.
-6. Accelerator receives configuration.
-7. Accelerator asserts `start_cnn`.
-8. Accelerator loads weights.
-9. Accelerator loads image data.
-10. Accelerator performs convolution.
-11. Accelerator performs MAC operations.
-12. Accelerator performs ReLU activation.
-13. Accelerator stores the INT16 feature map into BRAM.
-14. Firmware reads the INT16 feature map.
-15. Firmware performs Max Pooling.
-16. Firmware applies per-channel intermediate scaling.
-17. Firmware performs arithmetic right shift.
-18. Firmware quantizes the output.
-19. Firmware clamps the output to the valid INT8 range.
-20. Firmware stores the final INT8 feature map back into BRAM.
-
----
-
-# Hardware / Software Partitioning
-
-## RTL Accelerator
-
-Responsible for:
-
-- Weight Loading
-- Image Loading
-- Convolution
-- MAC Computation
-- ReLU Activation
-- INT16 Feature Map Generation
-
----
-
-## PicoRV32 Firmware
-
-Responsible for:
-
-- Max Pooling
-- Intermediate Scaling
-- Arithmetic Right Shift
-- Quantization
-- Clamping
-- Output Feature Map Storage
-
-This partition enables computationally intensive operations to execute in dedicated hardware while maintaining programmable post-processing in firmware.
+4. `CNN_LD_WT` configures weight parameters.
+5. `CNN_LD_IMG_EXE` configures image parameters.
+6. The accelerator asserts `start_cnn`.
+7. CNN weights are loaded.
+8. Input image data are loaded.
+9. Convolution is performed.
+10. MAC computation is executed.
+11. ReLU activation is applied.
+12. The INT16 feature map is written to BRAM.
+13. Firmware reads the INT16 feature map.
+14. Firmware performs Max Pooling.
+15. Intermediate scaling is applied.
+16. Arithmetic right shift is performed.
+17. Results are quantized to INT8.
+18. Values are clamped to the valid INT8 range.
+19. The final INT8 feature map is stored back into BRAM.
 
 ---
 
 # Verification
 
-The architecture was verified using both RTL and complete SoC simulations.
+The architecture was verified using both RTL simulation and complete SoC simulation.
 
 ## RTL Verification
 
-Verified:
+The following components were verified:
 
 - Custom instruction decoding
-- Configuration register updates
+- Configuration register programming
 - PCPI request detection
 - PCPI response generation
-- Debug signature generation
+- Accelerator control logic
 - Register write-back
+- Debug signature generation
 
 ---
 
 ## SoC Verification
 
-Verified:
+The complete embedded system was verified, including:
 
 - BootROM execution
 - Firmware loading
 - PicoRV32 execution
 - CNN custom instruction execution
 - Accelerator configuration
-- UART debug messages
-- Complete processor-to-accelerator communication
+- UART debug output
+- End-to-end processor-to-accelerator communication
 
 ---
 
 # Figures
 
-The following figures illustrate the architecture.
+The following figures accompany this document:
 
-- Overall SoC Block Diagram
-- PCPI Interface Diagram
+- SoC Block Diagram
 - CNN Processing Flow
+- PCPI Interface
 - RTL Simulation Results
 - SoC Simulation Results
 
-All figures are available in the `images/architecture` directory.
+All figures are available in the `images/architecture/` directory.
 
 ---
 
 # Summary
 
-The CNN-RISC-V Accelerator combines a custom RTL accelerator with PicoRV32 firmware to implement an efficient hardware/software co-design for CNN inference.
+The CNN-RISC-V Accelerator demonstrates a hardware/software co-designed embedded CNN inference architecture built around a modified PicoRV32 processor and a custom RTL accelerator.
 
-The RTL accelerator performs computationally intensive operations including weight loading, convolution, MAC computation, and ReLU activation, while firmware performs Max Pooling, intermediate scaling, quantization, and output formatting.
+The RTL accelerator performs weight loading, image loading, convolution, MAC computation, ReLU activation, and INT16 feature map generation, while PicoRV32 firmware performs Max Pooling, intermediate scaling, quantization, clamping, and final output generation.
 
-Communication between hardware and software is achieved using two custom RISC-V instructions implemented through the Pico Co-Processor Interface (PCPI), providing a clean and extensible interface between the processor and the CNN accelerator.
+Communication between the processor and accelerator is implemented through two custom RISC-V instructions using the Pico Co-Processor Interface (PCPI), providing a modular and extensible architecture suitable for embedded CNN acceleration.
